@@ -98,12 +98,12 @@ Proyek ini berfokus pada **empat pilar utama keamanan**, yang diimplementasikan 
 -- Admin User: Full Control
 GRANT ALL PRIVILEGES ON db_reservasi_wisata.* TO 'admin_user'@'localhost';
 
--- Petugas User: Manage Transactions & View Data
+-- Petugas User: Manage Transactions & View Audit
 GRANT SELECT ON db_reservasi_wisata.TBL_PENGGUNA TO 'petugas_user'@'localhost';
 GRANT SELECT, INSERT ON db_reservasi_wisata.TBL_PELANGGAN TO 'petugas_user'@'localhost';
 GRANT SELECT, INSERT, UPDATE ON db_reservasi_wisata.TBL_RESERVASI TO 'petugas_user'@'localhost';
 GRANT SELECT ON db_reservasi_wisata.TBL_PAKET_WISATA TO 'petugas_user'@'localhost';
-GRANT INSERT ON db_reservasi_wisata.TBL_AUDIT_LOG TO 'petugas_user'@'localhost';
+GRANT SELECT, INSERT ON db_reservasi_wisata.TBL_AUDIT_LOG TO 'petugas_user'@'localhost';
 
 -- Web App: Limited Insert Access
 GRANT SELECT ON db_reservasi_wisata.TBL_PAKET_WISATA TO 'web_app'@'localhost';
@@ -111,11 +111,17 @@ GRANT INSERT ON db_reservasi_wisata.TBL_RESERVASI TO 'web_app'@'localhost';
 GRANT INSERT ON db_reservasi_wisata.TBL_PELANGGAN TO 'web_app'@'localhost';
 ```
 
----
+## 📐 Skema Basis Data
 
+Struktur utama sistem reservasi meliputi **5 tabel inti** dengan relasi terkelola:
 
-
-### 📊 Tabel Utama
+```mermaid
+erDiagram
+    TBL_PENGGUNA ||--o{ TBL_RESERVASI : manages
+    TBL_PELANGGAN ||--o{ TBL_RESERVASI : books
+    TBL_PAKET_WISATA ||--o{ TBL_RESERVASI : contains
+    TBL_RESERVASI ||--o{ TBL_AUDIT_LOG : logs
+```
 
 | Tabel | Deskripsi | Fitur Keamanan |
 |-------|-----------|----------------|
@@ -191,7 +197,7 @@ CREATE TABLE TBL_AUDIT_LOG (
 
 ## 🚀 Quick Start
 
-### 📦 Instalasi
+### � Instalasi
 
 #### Prasyarat
 - MySQL 8.0+ atau MariaDB 10.5+
@@ -202,8 +208,8 @@ CREATE TABLE TBL_AUDIT_LOG (
 
 1. **Clone repository ini**
    ```bash
-   git clone https://github.com/DimasVSuper/Sistem-Reservasi-Wisata-Database.git
-   cd Sistem-Reservasi-Wisata-Database
+   git clone https://github.com/DimasVSuper/Sistem-reservasi-paket-wisata-pelayaran.git
+   cd Sistem-reservasi-paket-wisata-pelayaran
    ```
 
 2. **Import database**
@@ -219,7 +225,7 @@ CREATE TABLE TBL_AUDIT_LOG (
 
 ---
 
-## � Cara Penggunaan
+## 💻 Cara Penggunaan
 
 ### 1️⃣ Setup Database & Users
 
@@ -381,41 +387,50 @@ LIMIT 1;
 
 ---
 
-### � Hasil Testing
+### 📊 Hasil Testing Lengkap
 
-| Test Case | Aspek Keamanan | Status | Hasil yang Diharapkan |
-|-----------|---------------|--------|----------------------|
-| TC-1 | Integritas Data | ❌ GAGAL | CHECK constraint mencegah data invalid |
-| TC-2 | Otorisasi (petugas) | ❌ GAGAL | GRANT privilege membatasi akses UPDATE |
-| TC-3 | Otorisasi (web_app) | ❌ GAGAL | Tidak ada akses ke tabel sensitif |
-| TC-4 | Audit & Akuntabilitas | ✅ SUKSES | Trigger mencatat user & timestamp |
+| Test ID | Test Case | Aspek Keamanan | User | Status | Hasil yang Diharapkan |
+|---------|-----------|---------------|------|--------|----------------------|
+| **A1** | Verifikasi Hashing | Autentikasi | admin | ✅ SUKSES | Password tersimpan sebagai hash SHA2(512), bukan plaintext |
+| **A2** | Insert `jumlah_peserta = 0` | Integritas Data | admin/petugas | ❌ GAGAL | CHECK constraint mencegah data invalid |
+| **B1** | UPDATE status reservasi | Otorisasi (petugas) | petugas_user | ✅ SUKSES | Petugas boleh update transaksi |
+| **B2** | Verifikasi Audit Log | Audit & Akuntabilitas | petugas_user | ✅ SUKSES | Trigger mencatat user & timestamp |
+| **B3** | UPDATE harga paket | Otorisasi (petugas) | petugas_user | ❌ GAGAL | Petugas tidak boleh ubah master data |
+| **B4** | DROP TABLE | Otorisasi (petugas) | petugas_user | ❌ GAGAL | Petugas tidak punya hak DDL |
+| **C1** | INSERT reservasi baru | Otorisasi (web_app) | web_app | ✅ SUKSES | Web app boleh buat reservasi baru |
+| **C2** | UPDATE data pelanggan | Otorisasi (web_app) | web_app | ❌ GAGAL | Web app tidak boleh ubah data existing |
+| **C3** | SELECT TBL_PENGGUNA | Otorisasi (web_app) | web_app | ❌ GAGAL | Web app tidak boleh akses data sensitif |
 
-> **Catatan:** Kegagalan pada TC-1, TC-2, TC-3 adalah **hasil yang diinginkan** (security working as intended).
+> **Catatan Penting:** 
+> - ✅ **SUKSES** = Fungsi berjalan sesuai harapan (operasi berhasil atau security berfungsi)
+> - ❌ **GAGAL** = Security bekerja dengan baik (mencegah operasi yang tidak diizinkan)
+> 
+> Kegagalan pada A2, B3, B4, C2, C3 adalah **hasil yang diinginkan** (security working as intended).
 
 ---
 
 ## 📚 Dokumentasi
 
-### 📁 Struktur File
+### 📁 Struktur Proyek
 
 ```
-databaseplayground/
+Sistem-reservasi-paket-wisata-pelayaran/
 │
 ├── db_reservasi_wisata.sql    # Main SQL script (DDL, DML, DCL, Triggers, Test Cases)
-├── README.md                  # Dokumentasi proyek (file ini)
+└── README.md                  # Dokumentasi proyek (file ini)
 ```
 
 ### 🔍 Isi File SQL Utama
 
 File `db_reservasi_wisata.sql` berisi:
 
-1. **DDL (Data Definition Language)** - Struktur tabel dengan constraint keamanan
+1. **DDL (Data Definition Language)** - Struktur 5 tabel dengan constraint keamanan
 2. **DML (Data Manipulation Language)** - Data sample untuk testing
-3. **DCL (Data Control Language)** - User creation & GRANT privileges
-4. **Trigger** - Audit logging otomatis
-5. **Test Cases** - Skenario pengujian A1-C3 (9 test cases)
+3. **DCL (Data Control Language)** - User creation & GRANT privileges (3 roles)
+4. **Trigger** - Audit logging otomatis untuk akuntabilitas
+5. **Test Cases** - 9 skenario pengujian (A1-A3, B1-B4, C1-C3)
 
-> Total Lines: ~200+ baris SQL lengkap dengan komentar
+> **Total:** ~400+ baris SQL lengkap dengan dokumentasi
 
 ### 🔗 Referensi
 
@@ -430,8 +445,8 @@ File `db_reservasi_wisata.sql` berisi:
 
 Proyek ini dikembangkan oleh:
 
-- **[Dimas Bayu Nugroho 1]** - [NIM] - Database Admin & Lead
-- **[Nama Anggota 2]** - [NIM] - Security Implementation (DCL, Triggers)
+- **Dimas Bayu Nugroho** - 12200497 - Database Administrator & Project Lead
+- **[Nama Anggota 2]** - [NIM] - Security Implementation Specialist
 - **[Nama Anggota 3]** - [NIM] - Testing & Documentation
 
 ### 🤝 Kontribusi
@@ -448,21 +463,24 @@ Jika Anda menemukan bug atau ingin berkontribusi:
 ## 📄 Informasi Akademik
 
 - **Mata Kuliah:** Keamanan Basis Data
-- **Program Studi:** [Sistem Informasi]
-- **Universitas:** [Universitas Bina Sarana Informatika]
-- **Dosen Pengampu:** [Ahmad Nouvel, S.Kom, M.Kom]
+- **Program Studi:** Sistem Informasi
+- **Universitas:** Universitas Bina Sarana Informatika
+- **Tahun Akademik:** 2024/2025
+- **Dosen Pengampu:** Ahmad Nouvel, S.Kom, M.Kom
 
 ---
 
 ## 📝 Lisensi
 
-Proyek ini dibuat untuk keperluan akademik,pembelajaran dan tugas. Tidak diperuntukkan untuk penggunaan komersial.
+Proyek ini dibuat untuk keperluan akademik dan pembelajaran. Tidak diperuntukkan untuk penggunaan komersial.
 
 ---
 
 <div align="center">
 
 **⭐ Jika proyek ini membantu, berikan bintang di repository!**
+
+Made with ❤️ for Database Security Course
 
 ![Footer](https://img.shields.io/badge/MySQL-Database%20Security-blue?style=flat-square)
 ![Footer](https://img.shields.io/badge/Academic-Project-orange?style=flat-square)
