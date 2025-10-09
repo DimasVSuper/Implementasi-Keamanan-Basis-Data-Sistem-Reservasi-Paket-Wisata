@@ -113,17 +113,7 @@ GRANT INSERT ON db_reservasi_wisata.TBL_PELANGGAN TO 'web_app'@'localhost';
 
 ---
 
-## 📐 Skema Basis Data
 
-Struktur utama sistem reservasi meliputi **6 tabel inti** dengan relasi terkelola:
-
-```mermaid
-erDiagram
-    TBL_PENGGUNA ||--o{ TBL_RESERVASI : manages
-    TBL_PELANGGAN ||--o{ TBL_RESERVASI : books
-    TBL_PAKET_WISATA ||--o{ TBL_RESERVASI : contains
-    TBL_RESERVASI ||--o{ TBL_AUDIT_LOG : logs
-```
 
 ### 📊 Tabel Utama
 
@@ -413,11 +403,6 @@ databaseplayground/
 │
 ├── db_reservasi_wisata.sql    # Main SQL script (DDL, DML, DCL, Triggers, Test Cases)
 ├── README.md                  # Dokumentasi proyek (file ini)
-│
-└── docs/                      # (Opsional) Dokumentasi tambahan
-    ├── ER_Diagram.png         # Entity Relationship Diagram
-    ├── Security_Report.pdf    # Laporan analisis keamanan
-    └── Test_Results.md        # Screenshot hasil testing
 ```
 
 ### 🔍 Isi File SQL Utama
