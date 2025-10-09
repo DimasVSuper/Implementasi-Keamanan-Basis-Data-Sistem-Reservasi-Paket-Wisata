@@ -1,3 +1,4 @@
+-- Active: 1759996136955@@127.0.0.1@3306@db_reservasi_wisata
 -- ═════════════════════════════════════════════════════════════════════════════
 -- 🛡️ SISTEM RESERVASI PAKET WISATA - DATABASE SECURITY IMPLEMENTATION
 -- ═════════════════════════════════════════════════════════════════════════════
@@ -33,7 +34,7 @@ USE db_reservasi_wisata;
 CREATE TABLE TBL_PENGGUNA (
     id_pengguna     INT PRIMARY KEY AUTO_INCREMENT,
     username        VARCHAR(50) NOT NULL UNIQUE,
-    password_hash   VARCHAR(128) NOT NULL,              -- SHA2(512) hash (128 karakter hex)
+    password_hash   VARCHAR(128) NOT NULL,
     nama_lengkap    VARCHAR(100),
     jabatan         ENUM('Admin', 'Petugas_Reservasi', 'Pelanggan') NOT NULL,
     status          ENUM('Aktif', 'Nonaktif') DEFAULT 'Aktif'
@@ -48,8 +49,8 @@ CREATE TABLE TBL_PENGGUNA (
 CREATE TABLE TBL_PELANGGAN (
     id_pelanggan    INT PRIMARY KEY AUTO_INCREMENT,
     nama_pelanggan  VARCHAR(100) NOT NULL,
-    email           VARCHAR(100) NOT NULL UNIQUE,       -- Validasi email unik
-    telepon         VARCHAR(15) NOT NULL UNIQUE,        -- Validasi nomor telepon unik
+    email           VARCHAR(100) NOT NULL UNIQUE,
+    telepon         VARCHAR(15) NOT NULL UNIQUE,
     alamat          TEXT
 ) ENGINE=InnoDB;
 
@@ -64,8 +65,9 @@ CREATE TABLE TBL_PAKET_WISATA (
     nama_paket      VARCHAR(150) NOT NULL,
     deskripsi       TEXT,
     durasi_hari     INT NOT NULL,
-    harga           DECIMAL(10, 2) NOT NULL CHECK (harga >= 0),  -- Integritas: harga tidak boleh negatif
-    status_paket    ENUM('Tersedia', 'Penuh', 'Arsip') DEFAULT 'Tersedia'
+    harga           DECIMAL(10, 2) NOT NULL,
+    status_paket    ENUM('Tersedia', 'Penuh', 'Arsip') DEFAULT 'Tersedia',
+    CONSTRAINT chk_harga_positive CHECK (harga >= 0)
 ) ENGINE=InnoDB;
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -82,18 +84,19 @@ CREATE TABLE TBL_RESERVASI (
     id_pelanggan        INT NOT NULL,
     id_paket            INT NOT NULL,
     tanggal_reservasi   DATE NOT NULL,
-    jumlah_peserta      INT NOT NULL CHECK (jumlah_peserta > 0),    -- Minimal 1 peserta
+    jumlah_peserta      INT NOT NULL,
     total_biaya         DECIMAL(10, 2) NOT NULL,
     status_pembayaran   ENUM('Pending', 'Lunas', 'Batal') DEFAULT 'Pending',
-    
-    -- Integritas Referensial
     FOREIGN KEY (id_pelanggan) REFERENCES TBL_PELANGGAN(id_pelanggan)
-        ON DELETE RESTRICT                                          -- Cegah hapus pelanggan yang punya reservasi
+        ON DELETE RESTRICT
         ON UPDATE CASCADE,
     FOREIGN KEY (id_paket) REFERENCES TBL_PAKET_WISATA(id_paket)
-        ON DELETE RESTRICT                                          -- Cegah hapus paket yang sedang direservasi
-        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+    CONSTRAINT chk_jumlah_peserta_positive CHECK (jumlah_peserta > 0)
 ) ENGINE=InnoDB;
+
+
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Tabel 5: TBL_AUDIT_LOG (AUDIT & ACCOUNTABILITY)
@@ -104,12 +107,12 @@ CREATE TABLE TBL_RESERVASI (
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE TBL_AUDIT_LOG (
     id_log              INT PRIMARY KEY AUTO_INCREMENT,
-    tabel_terpengaruh   VARCHAR(50),                                -- Nama tabel yang berubah
-    aksi                VARCHAR(10),                                -- INSERT | UPDATE | DELETE
-    data_lama           TEXT,                                       -- Snapshot data sebelum perubahan
-    data_baru           TEXT,                                       -- Snapshot data setelah perubahan
-    waktu_aksi          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,       -- Waktu perubahan terjadi
-    pengguna_mysql      VARCHAR(100)                                -- User MySQL yang melakukan aksi (dari USER())
+    tabel_terpengaruh   VARCHAR(50),
+    aksi                VARCHAR(10),
+    data_lama           TEXT,
+    data_baru           TEXT,
+    waktu_aksi          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    pengguna_mysql      VARCHAR(100)
 ) ENGINE=InnoDB;
 
 -- ═════════════════════════════════════════════════════════════════════════════
@@ -138,11 +141,12 @@ INSERT INTO TBL_PELANGGAN (nama_pelanggan, email, telepon, alamat) VALUES
 -- ─────────────────────────────────────────────────────────────────────────────
 -- KEAMANAN: Password di-hash menggunakan SHA2(512) sebelum disimpan
 -- Password TIDAK PERNAH disimpan dalam plaintext
+-- Password untuk testing: admin123, petugas456, passpelanggan
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO TBL_PENGGUNA (username, password_hash, nama_lengkap, jabatan) VALUES
-('admin_pusat',   SHA2('admin123', 512),      'Budi Santoso',    'Admin'),              -- Password: admin123
-('petugas_bdg',   SHA2('petugas456', 512),    'Citra Dewi',      'Petugas_Reservasi'),  -- Password: petugas456
-('pelanggan_jkt', SHA2('passpelanggan', 512), 'Ahmad Hidayat',   'Pelanggan');          -- Password: passpelanggan
+('admin_pusat',   SHA2('admin123', 512),      'Budi Santoso',    'Admin'),
+('petugas_bdg',   SHA2('petugas456', 512),    'Citra Dewi',      'Petugas_Reservasi'),
+('pelanggan_jkt', SHA2('passpelanggan', 512), 'Ahmad Hidayat',   'Pelanggan');
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Data Sample: TBL_RESERVASI (2 reservasi awal)
@@ -171,7 +175,6 @@ CREATE TRIGGER tr_reservasi_update_log
 AFTER UPDATE ON TBL_RESERVASI
 FOR EACH ROW
 BEGIN
-    -- Hanya log jika ada perubahan pada kolom kritis (status_pembayaran atau total_biaya)
     IF OLD.status_pembayaran <> NEW.status_pembayaran 
        OR OLD.total_biaya <> NEW.total_biaya THEN
         
@@ -185,15 +188,12 @@ BEGIN
         VALUES (
             'TBL_RESERVASI',
             'UPDATE',
-            -- Snapshot data sebelum perubahan
             CONCAT('ID: ', OLD.id_reservasi, 
                    ', Status: ', OLD.status_pembayaran, 
                    ', Biaya: Rp ', FORMAT(OLD.total_biaya, 2)),
-            -- Snapshot data setelah perubahan
             CONCAT('ID: ', NEW.id_reservasi,
                    ', Status: ', NEW.status_pembayaran, 
                    ', Biaya: Rp ', FORMAT(NEW.total_biaya, 2)),
-            -- Mencatat user MySQL yang melakukan aksi (contoh: petugas_user@localhost)
             USER()
         );
     END IF;
@@ -213,10 +213,11 @@ DELIMITER ;
 -- 4.1. Pembuatan User MySQL untuk Setiap Role
 -- ─────────────────────────────────────────────────────────────────────────────
 -- CATATAN: Memerlukan privilege CREATE USER (jalankan sebagai root)
+-- Password: StrongPassAdmin123!, StrongPassPetugas456!, StrongPassWebApp789!
 -- ─────────────────────────────────────────────────────────────────────────────
-CREATE USER IF NOT EXISTS 'admin_user'@'localhost'   IDENTIFIED BY 'StrongPassAdmin123!';     -- Role: Administrator
-CREATE USER IF NOT EXISTS 'petugas_user'@'localhost' IDENTIFIED BY 'StrongPassPetugas456!';   -- Role: Petugas Reservasi
-CREATE USER IF NOT EXISTS 'web_app'@'localhost'      IDENTIFIED BY 'StrongPassWebApp789!';    -- Role: Web/Mobile Application
+CREATE USER IF NOT EXISTS 'admin_user'@'localhost'   IDENTIFIED BY 'StrongPassAdmin123!';
+CREATE USER IF NOT EXISTS 'petugas_user'@'localhost' IDENTIFIED BY 'StrongPassPetugas456!';
+CREATE USER IF NOT EXISTS 'web_app'@'localhost'      IDENTIFIED BY 'StrongPassWebApp789!';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4.2. ROLE A: ADMIN USER (Full Control)
@@ -234,46 +235,22 @@ GRANT ALL PRIVILEGES ON db_reservasi_wisata.* TO 'admin_user'@'localhost';
 -- Tujuan      : Kelola transaksi booking, update status pembayaran
 -- Prinsip     : Least Privilege - TIDAK boleh ubah master data (paket wisata)
 -- ─────────────────────────────────────────────────────────────────────────────
-
--- TBL_PENGGUNA: SELECT only (lihat user lain, tidak boleh ubah)
 GRANT SELECT ON db_reservasi_wisata.TBL_PENGGUNA TO 'petugas_user'@'localhost';
-
--- TBL_PELANGGAN: SELECT + INSERT (registrasi pelanggan baru)
 GRANT SELECT, INSERT ON db_reservasi_wisata.TBL_PELANGGAN TO 'petugas_user'@'localhost';
-
--- TBL_RESERVASI: SELECT + INSERT + UPDATE (kelola transaksi)
 GRANT SELECT, INSERT, UPDATE ON db_reservasi_wisata.TBL_RESERVASI TO 'petugas_user'@'localhost';
-
--- TBL_PAKET_WISATA: SELECT only (lihat katalog, TIDAK boleh ubah harga)
 GRANT SELECT ON db_reservasi_wisata.TBL_PAKET_WISATA TO 'petugas_user'@'localhost';
-
--- TBL_AUDIT_LOG: INSERT only (diperlukan agar trigger bisa menulis log)
-GRANT INSERT ON db_reservasi_wisata.TBL_AUDIT_LOG TO 'petugas_user'@'localhost';
+GRANT SELECT, INSERT ON db_reservasi_wisata.TBL_AUDIT_LOG TO 'petugas_user'@'localhost';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4.4. ROLE C: WEB_APP USER (Customer Transactions Only)
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Hak Akses   : Paling terbatas (INSERT only untuk reservasi & pelanggan baru)
 -- Tujuan      : Aplikasi web/mobile untuk customer self-service booking
--- Prinsip     : 
---   - TIDAK boleh lihat/ubah data pelanggan lain
---   - TIDAK boleh akses data sensitif (TBL_PENGGUNA)
---   - TIDAK boleh ubah data existing
+-- Prinsip     : TIDAK boleh akses data sensitif & UPDATE/DELETE data existing
 -- ─────────────────────────────────────────────────────────────────────────────
-
--- TBL_PAKET_WISATA: SELECT only (lihat katalog paket wisata)
 GRANT SELECT ON db_reservasi_wisata.TBL_PAKET_WISATA TO 'web_app'@'localhost';
-
--- TBL_PELANGGAN: INSERT only (registrasi pelanggan baru)
 GRANT INSERT ON db_reservasi_wisata.TBL_PELANGGAN TO 'web_app'@'localhost';
-
--- TBL_RESERVASI: INSERT only (buat reservasi baru)
 GRANT INSERT ON db_reservasi_wisata.TBL_RESERVASI TO 'web_app'@'localhost';
-
--- TIDAK ADA AKSES ke:
--- - TBL_PENGGUNA (data kredensial sensitif)
--- - TBL_AUDIT_LOG (data forensik internal)
--- - UPDATE/DELETE privilege (mencegah manipulasi data)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Terapkan semua perubahan privilege
@@ -315,7 +292,6 @@ WHERE username = 'admin_pusat';
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT 'A2. Uji Integritas Data (Harus Gagal)' AS Test_Case;
 
--- Statement berikut HARUS GAGAL karena jumlah_peserta = 0 melanggar CHECK constraint
 INSERT INTO TBL_RESERVASI (id_pelanggan, id_paket, tanggal_reservasi, jumlah_peserta, total_biaya) 
 VALUES (1, 1, '2025-10-10', 0, 1000000.00);
 
@@ -377,7 +353,6 @@ LIMIT 1;
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT 'B3. Uji UPDATE TBL_PAKET_WISATA (Petugas - Harusnya Gagal)' AS Test_Case;
 
--- Statement berikut HARUS GAGAL karena petugas_user hanya punya SELECT privilege
 UPDATE TBL_PAKET_WISATA 
 SET harga = 0.00 
 WHERE id_paket = 1;
@@ -390,7 +365,6 @@ WHERE id_paket = 1;
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT 'B4. Uji DROP TABLE (Petugas - Harusnya Gagal)' AS Test_Case;
 
--- Statement berikut HARUS GAGAL karena petugas_user tidak punya privilege DROP
 DROP TABLE TBL_AUDIT_LOG;
 
 -- ╔═════════════════════════════════════════════════════════════════════════╗
@@ -421,7 +395,6 @@ VALUES (1, 3, '2025-10-25', 2, 6400000.00);
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT 'C2. Uji UPDATE TBL_PELANGGAN (Web App - Harusnya Gagal)' AS Test_Case;
 
--- Statement berikut HARUS GAGAL karena web_app hanya punya INSERT privilege
 UPDATE TBL_PELANGGAN 
 SET email = 'hacker@mail.com' 
 WHERE id_pelanggan = 1;
@@ -435,7 +408,6 @@ WHERE id_pelanggan = 1;
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT 'C3. Uji SELECT TBL_PENGGUNA (Web App - Harusnya Gagal)' AS Test_Case;
 
--- Statement berikut HARUS GAGAL karena web_app tidak punya akses ke TBL_PENGGUNA
 SELECT * FROM TBL_PENGGUNA;
 
 -- ═════════════════════════════════════════════════════════════════════════════
