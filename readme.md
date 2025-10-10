@@ -438,6 +438,7 @@ File `db_reservasi_wisata.sql` berisi:
 - [ISO/IEC 27001 - Information Security](https://www.iso.org/isoiec-27001-information-security.html)
 - [OWASP Database Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Database_Security_Cheat_Sheet.html)
 - [MySQL 8.0 Security Guide](https://dev.mysql.com/doc/refman/8.0/en/security.html)
+- [Sistem-reservasi-wisata-pelayaran](https://www.researchgate.net/profile/Wildan-Wiguna-2/publication/341142990_Sistem_Reservasi_Paket_Wisata_Pelayaran_Menggunakan_Mobile_Commerce_di_Kota_Bandung/links/5eb0c00945851592d6b96151/Sistem-Reservasi-Paket-Wisata-Pelayaran-Menggunakan-Mobile-Commerce-di-Kota-Bandung.pdf)
 
 ---
 
