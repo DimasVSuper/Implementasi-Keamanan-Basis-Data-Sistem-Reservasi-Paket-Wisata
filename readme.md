@@ -481,7 +481,7 @@ Proyek ini dibuat untuk keperluan akademik dan pembelajaran. Tidak diperuntukkan
 
 **⭐ Jika proyek ini membantu, berikan bintang di repository!**
 
-Made with ❤️ for Database Security Course
+Made with ❤️
 
 ![Footer](https://img.shields.io/badge/MySQL-Database%20Security-blue?style=flat-square)
 ![Footer](https://img.shields.io/badge/Academic-Project-orange?style=flat-square)
