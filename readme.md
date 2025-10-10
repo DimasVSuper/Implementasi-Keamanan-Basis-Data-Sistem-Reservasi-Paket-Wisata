@@ -4,7 +4,7 @@
 
 ![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
 ![Security](https://img.shields.io/badge/Security-Database-red?style=for-the-badge&logo=security&logoColor=white)
-![License](https://img.shields.io/badge/License-Academic-g### 📊 Hasil Testing Lengkap
+![License](https://img.shields.io/badge/License-Academic-g###) 📊 Hasil Testing Lengkap
 
 | Test ID | Test Case | Aspek Keamanan | User | Status | Hasil yang Diharapkan |
 |---------|-----------|---------------|------|--------|----------------------|
