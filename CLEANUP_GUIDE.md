@@ -107,6 +107,6 @@ C:\xampp\mysql\bin\mysql.exe -u root -p -e "SELECT User, Host FROM mysql.user WH
 
 ---
 
-**Dibuat oleh:** Dimas Bayu Nugroho (12200497)  
+**Dibuat oleh:** Dimas Bayu Nugroho (19240384)  
 **Mata Kuliah:** Keamanan Basis Data  
 **Universitas:** Bina Sarana Informatika
