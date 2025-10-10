@@ -485,7 +485,7 @@ File `db_reservasi_wisata.sql` berisi:
 
 Proyek ini dikembangkan oleh:
 
-- **Dimas Bayu Nugroho** - 12200497 - Database Administrator & Project Lead
+- **Dimas Bayu Nugroho** - 19240384 - Database Administrator & Project Lead
 - **[Nama Anggota 2]** - [NIM] - Security Implementation Specialist
 - **[Nama Anggota 3]** - [NIM] - Testing & Documentation
 
