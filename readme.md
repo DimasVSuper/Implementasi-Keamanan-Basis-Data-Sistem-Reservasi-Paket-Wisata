@@ -87,10 +87,10 @@ Proyek ini berfokus pada **empat pilar utama keamanan**, yang diimplementasikan 
 
 | 🔐 Pilar Keamanan | 💻 Implementasi Teknis | 📝 Detail & Tujuan Keamanan |
 |-------------------|------------------------|----------------------------|
-| **1. Autentikasi** | `SHA2(512)` Password Hashing | Melindungi kredensial admin/petugas (`TBL_PENGGUNA`) dari kebocoran data. Password tidak tersimpan dalam plaintext. |
+| **1. Autentikasi** | `SHA2(512)` Password Hashing | Melindungi kredensial admin/petugas (`users`) dan customer (`customers`) dari kebocoran data. Password tidak tersimpan dalam plaintext. |
 | **2. Otorisasi (Kontrol Akses)** | DCL (`GRANT`) & Prinsip Least Privilege | Membatasi hak akses setiap peran (`admin_user`, `petugas_user`, `web_app`) hanya pada tabel dan operasi yang diperlukan, mencegah akses berlebihan (NIST SP 800-53). |
-| **3. Integritas Data** | `CHECK` Constraint & `FOREIGN KEY` | Menjaga kualitas data (contoh: `harga >= 0`, `jumlah_peserta > 0`) dan konsistensi relasi antar tabel. |
-| **4. Audit & Akuntabilitas** | `TRIGGER` ke `TBL_AUDIT_LOG` | Mencatat setiap perubahan kritis pada transaksi (`UPDATE TBL_RESERVASI` status pembayaran), memberikan jejak audit (`pengguna_mysql` dan `waktu_aksi`) untuk akuntabilitas. |
+| **3. Integritas Data** | `CHECK` Constraint & `FOREIGN KEY` | Menjaga kualitas data (contoh: `price >= 0`, `paid >= 0`) dan konsistensi relasi antar tabel dengan ON DELETE RESTRICT. |
+| **4. Audit & Akuntabilitas** | `TRIGGER` ke `audit_log` | Mencatat setiap perubahan kritis pada transaksi (`UPDATE reservations`, `INSERT payments`), memberikan jejak audit (`mysql_user` dan `action_timestamp`) untuk akuntabilitas. |
 
 ### 🔒 Role-Based Access Control (RBAC)
 
@@ -99,37 +99,43 @@ Proyek ini berfokus pada **empat pilar utama keamanan**, yang diimplementasikan 
 GRANT ALL PRIVILEGES ON db_reservasi_wisata.* TO 'admin_user'@'localhost';
 
 -- Petugas User: Manage Transactions & View Audit
-GRANT SELECT ON db_reservasi_wisata.TBL_PENGGUNA TO 'petugas_user'@'localhost';
-GRANT SELECT, INSERT ON db_reservasi_wisata.TBL_PELANGGAN TO 'petugas_user'@'localhost';
-GRANT SELECT, INSERT, UPDATE ON db_reservasi_wisata.TBL_RESERVASI TO 'petugas_user'@'localhost';
-GRANT SELECT ON db_reservasi_wisata.TBL_PAKET_WISATA TO 'petugas_user'@'localhost';
-GRANT SELECT, INSERT ON db_reservasi_wisata.TBL_AUDIT_LOG TO 'petugas_user'@'localhost';
+GRANT SELECT ON db_reservasi_wisata.users TO 'petugas_user'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON db_reservasi_wisata.customers TO 'petugas_user'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON db_reservasi_wisata.reservations TO 'petugas_user'@'localhost';
+GRANT SELECT, INSERT ON db_reservasi_wisata.payments TO 'petugas_user'@'localhost';
+GRANT SELECT ON db_reservasi_wisata.packages TO 'petugas_user'@'localhost';
+GRANT SELECT, INSERT ON db_reservasi_wisata.audit_log TO 'petugas_user'@'localhost';
 
--- Web App: Limited Insert Access
-GRANT SELECT ON db_reservasi_wisata.TBL_PAKET_WISATA TO 'web_app'@'localhost';
-GRANT INSERT ON db_reservasi_wisata.TBL_RESERVASI TO 'web_app'@'localhost';
-GRANT INSERT ON db_reservasi_wisata.TBL_PELANGGAN TO 'web_app'@'localhost';
+-- Web App: Limited Insert Access Only
+GRANT SELECT ON db_reservasi_wisata.packages TO 'web_app'@'localhost';
+GRANT INSERT ON db_reservasi_wisata.customers TO 'web_app'@'localhost';
+GRANT INSERT ON db_reservasi_wisata.reservations TO 'web_app'@'localhost';
+GRANT INSERT ON db_reservasi_wisata.payments TO 'web_app'@'localhost';
 ```
 
 ## 📐 Skema Basis Data
 
-Struktur utama sistem reservasi meliputi **5 tabel inti** dengan relasi terkelola:
+Struktur utama sistem reservasi meliputi **6 tabel inti** dengan relasi terkelola:
 
 ```mermaid
 erDiagram
-    TBL_PENGGUNA ||--o{ TBL_RESERVASI : manages
-    TBL_PELANGGAN ||--o{ TBL_RESERVASI : books
-    TBL_PAKET_WISATA ||--o{ TBL_RESERVASI : contains
-    TBL_RESERVASI ||--o{ TBL_AUDIT_LOG : logs
+    users ||--o{ reservations : manages
+    customers ||--o{ reservations : books
+    customers ||--o{ payments : pays
+    packages ||--o{ reservations : includes
+    reservations ||--o{ payments : receives
+    reservations ||--o{ audit_log : logs
+    payments ||--o{ audit_log : tracks
 ```
 
 | Tabel | Deskripsi | Fitur Keamanan |
 |-------|-----------|----------------|
-| `TBL_PENGGUNA` | Data user admin/petugas sistem | Password hashing SHA2(512), UNIQUE username |
-| `TBL_PELANGGAN` | Data customer/wisatawan | UNIQUE email & telepon |
-| `TBL_PAKET_WISATA` | Katalog paket wisata | CHECK constraint `harga >= 0` |
-| `TBL_RESERVASI` | **Transaksi booking** (core) | CHECK `jumlah_peserta > 0`, Foreign key constraints, audit trigger |
-| `TBL_AUDIT_LOG` | Log perubahan kritis | Auto-populated via trigger, mencatat USER() |
+| `users` | Data admin/petugas sistem internal | Password hashing SHA2(512), UNIQUE email |
+| `customers` | Data customer/wisatawan yang booking | UNIQUE email & number, password hashing SHA2(512) |
+| `packages` | Katalog paket wisata pelayaran | CHECK constraint `price >= 0`, destination & photo info |
+| `reservations` | **Transaksi booking** (core table) | UNIQUE code, CHECK `price >= 0`, Foreign key constraints, audit trigger |
+| `payments` | Data pembayaran dari customer | CHECK `paid >= 0`, Foreign key ke reservations & customers |
+| `audit_log` | Log perubahan kritis | Auto-populated via trigger, mencatat USER() dan timestamp |
 
 ### 🗂️ Detail Struktur
 
@@ -137,58 +143,85 @@ erDiagram
 <summary><b>Klik untuk melihat DDL lengkap</b></summary>
 
 ```sql
--- TBL_PENGGUNA: Autentikasi dengan SHA2
-CREATE TABLE TBL_PENGGUNA (
-    id_pengguna INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password_hash VARCHAR(128) NOT NULL,  -- SHA2(512)
-    nama_lengkap VARCHAR(100),
-    jabatan ENUM('Admin', 'Petugas_Reservasi', 'Pelanggan') NOT NULL,
-    status ENUM('Aktif', 'Nonaktif') DEFAULT 'Aktif'
-);
+-- USERS: Autentikasi admin/petugas dengan SHA2(512)
+CREATE TABLE users (
+    id              INT PRIMARY KEY AUTO_INCREMENT,
+    name            VARCHAR(100) NOT NULL,
+    email           VARCHAR(100) NOT NULL UNIQUE,
+    password        VARCHAR(128) NOT NULL,  -- SHA2(512) hash
+    remember_token  VARCHAR(100),
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
 
--- TBL_PELANGGAN
-CREATE TABLE TBL_PELANGGAN (
-    id_pelanggan INT PRIMARY KEY AUTO_INCREMENT,
-    nama_pelanggan VARCHAR(100) NOT NULL,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    telepon VARCHAR(15) NOT NULL UNIQUE,
-    alamat TEXT
-);
+-- CUSTOMERS: Data pelanggan/wisatawan
+CREATE TABLE customers (
+    id          INT PRIMARY KEY AUTO_INCREMENT,
+    number      VARCHAR(20) NOT NULL UNIQUE,
+    name        VARCHAR(100) NOT NULL,
+    address     TEXT,
+    phone       VARCHAR(15) NOT NULL,
+    email       VARCHAR(100) NOT NULL UNIQUE,
+    password    VARCHAR(128) NOT NULL,  -- SHA2(512) hash
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
 
--- TBL_PAKET_WISATA: Integritas Data (CHECK Constraint)
-CREATE TABLE TBL_PAKET_WISATA (
-    id_paket INT PRIMARY KEY AUTO_INCREMENT,
-    nama_paket VARCHAR(150) NOT NULL,
-    deskripsi TEXT,
-    durasi_hari INT NOT NULL,
-    harga DECIMAL(10, 2) NOT NULL CHECK (harga >= 0),
-    status_paket ENUM('Tersedia', 'Penuh', 'Arsip') DEFAULT 'Tersedia'
-);
+-- PACKAGES: Paket wisata pelayaran
+CREATE TABLE packages (
+    id          INT PRIMARY KEY AUTO_INCREMENT,
+    name        VARCHAR(150) NOT NULL,
+    destination VARCHAR(150) NOT NULL,
+    description TEXT,
+    photo       VARCHAR(255),
+    price       DECIMAL(10, 2) NOT NULL,
+    valid_until DATE,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT chk_price_positive CHECK (price >= 0)
+) ENGINE=InnoDB;
 
--- TBL_RESERVASI: Integritas dengan CHECK & FK
-CREATE TABLE TBL_RESERVASI (
-    id_reservasi INT PRIMARY KEY AUTO_INCREMENT,
-    id_pelanggan INT NOT NULL,
-    id_paket INT NOT NULL,
-    tanggal_reservasi DATE NOT NULL,
-    jumlah_peserta INT NOT NULL CHECK (jumlah_peserta > 0),
-    total_biaya DECIMAL(10, 2) NOT NULL,
-    status_pembayaran ENUM('Pending', 'Lunas', 'Batal') DEFAULT 'Pending',
-    FOREIGN KEY (id_pelanggan) REFERENCES TBL_PELANGGAN(id_pelanggan),
-    FOREIGN KEY (id_paket) REFERENCES TBL_PAKET_WISATA(id_paket)
-);
+-- RESERVATIONS: Transaksi booking (Core Table)
+CREATE TABLE reservations (
+    id          INT PRIMARY KEY AUTO_INCREMENT,
+    code        VARCHAR(50) NOT NULL UNIQUE,
+    customer_id INT NOT NULL,
+    package_id  INT NOT NULL,
+    departure   DATE NOT NULL,
+    price       DECIMAL(10, 2) NOT NULL,
+    status      ENUM('Pending', 'Confirmed', 'Cancelled') DEFAULT 'Pending',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (package_id) REFERENCES packages(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT chk_price_reservation_positive CHECK (price >= 0)
+) ENGINE=InnoDB;
 
--- TBL_AUDIT_LOG: Untuk Audit dan Akuntabilitas
-CREATE TABLE TBL_AUDIT_LOG (
-    id_log INT PRIMARY KEY AUTO_INCREMENT,
-    tabel_terpengaruh VARCHAR(50),
-    aksi VARCHAR(10), -- INSERT, UPDATE, DELETE
-    data_lama TEXT,
-    data_baru TEXT,
-    waktu_aksi TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    pengguna_mysql VARCHAR(100) -- Mencatat siapa yang melakukan aksi
-);
+-- PAYMENTS: Data pembayaran
+CREATE TABLE payments (
+    id              INT PRIMARY KEY AUTO_INCREMENT,
+    reservation_id  INT NOT NULL,
+    customer_id     INT NOT NULL,
+    method          VARCHAR(50) NOT NULL,
+    name_of         VARCHAR(100) NOT NULL,
+    paid            DECIMAL(10, 2) NOT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (reservation_id) REFERENCES reservations(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT chk_paid_positive CHECK (paid >= 0)
+) ENGINE=InnoDB;
+
+-- AUDIT_LOG: Audit trail untuk akuntabilitas
+CREATE TABLE audit_log (
+    id                  INT PRIMARY KEY AUTO_INCREMENT,
+    table_affected      VARCHAR(50),
+    action              VARCHAR(10),  -- INSERT, UPDATE, DELETE
+    old_data            TEXT,
+    new_data            TEXT,
+    action_timestamp    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    mysql_user          VARCHAR(100)  -- Mencatat siapa yang melakukan aksi
+) ENGINE=InnoDB;
 ```
 
 </details>
@@ -245,13 +278,13 @@ Skrip ini akan otomatis:
 ### 2️⃣ Login sebagai User Spesifik
 
 ```bash
-# Admin - Full Access (Password: StrongPassAdmin123!)
+# Admin - Full Access (Password: AdminPass123!)
 mysql -u admin_user -p db_reservasi_wisata
 
-# Petugas - Limited Access (Password: StrongPassPetugas456!)
+# Petugas - Limited Access (Password: PetugasPass456!)
 mysql -u petugas_user -p db_reservasi_wisata
 
-# Web App - Read Only (Password: StrongPassWebApp789!)
+# Web App - Most Restricted (Password: WebAppPass789!)
 mysql -u web_app -p db_reservasi_wisata
 ```
 
@@ -261,19 +294,22 @@ mysql -u web_app -p db_reservasi_wisata
 
 ```sql
 -- Cek paket wisata tersedia (sebagai petugas_user atau web_app)
-SELECT * FROM TBL_PAKET_WISATA WHERE status_paket = 'Tersedia';
+SELECT * FROM packages WHERE valid_until >= CURDATE();
 
 -- Buat reservasi baru (sebagai petugas_user)
-INSERT INTO TBL_RESERVASI (id_pelanggan, id_paket, tanggal_reservasi, jumlah_peserta, total_biaya)
-VALUES (1, 2, '2026-01-15', 4, 3800000.00);
+INSERT INTO reservations (code, customer_id, package_id, departure, price, status)
+VALUES ('RSV-2025-005', 1, 2, '2026-01-15', 5500000.00, 'Pending');
 
--- Update status pembayaran (trigger audit akan aktif - sebagai petugas_user)
-UPDATE TBL_RESERVASI 
-SET status_pembayaran = 'Lunas' 
-WHERE id_reservasi = 1;
+-- Update status reservasi (trigger audit akan aktif - sebagai petugas_user)
+UPDATE reservations 
+SET status = 'Confirmed' 
+WHERE code = 'RSV-2025-005';
 
--- Verifikasi audit log (sebagai admin_user)
-SELECT * FROM TBL_AUDIT_LOG ORDER BY waktu_aksi DESC LIMIT 5;
+-- Verifikasi audit log (sebagai admin_user atau petugas_user)
+SELECT * FROM audit_log 
+WHERE table_affected = 'reservations' 
+ORDER BY action_timestamp DESC 
+LIMIT 5;
 ```
 
 ---
@@ -288,14 +324,14 @@ Skrip SQL terlampir mencakup **simulasi terstruktur** untuk memverifikasi bahwa 
 
 ```sql
 -- Login sebagai admin_user atau petugas_user
--- Harus GAGAL: jumlah_peserta = 0 (melanggar CHECK constraint)
-INSERT INTO TBL_RESERVASI (id_pelanggan, id_paket, tanggal_reservasi, jumlah_peserta, total_biaya)
-VALUES (1, 1, '2025-10-10', 0, 1000000.00);
+-- Harus GAGAL: price negatif (melanggar CHECK constraint)
+INSERT INTO packages (name, destination, description, price, valid_until)
+VALUES ('Paket Test', 'Test Destination', 'Test', -1000.00, '2025-12-31');
 ```
 
-**Expected Result:** ❌ `ERROR 3819 (HY000): Check constraint 'tbl_reservasi_chk_1' is violated`
+**Expected Result:** ❌ `ERROR 4025 (23000): CONSTRAINT 'chk_price_positive' failed for 'db_reservasi_wisata'.'packages'`
 
-**Penjelasan:** Constraint `CHECK (jumlah_peserta > 0)` mencegah data yang tidak valid masuk ke database.
+**Penjelasan:** Constraint `CHECK (price >= 0)` mencegah data yang tidak valid masuk ke database.
 
 ---
 
@@ -308,15 +344,15 @@ VALUES (1, 1, '2025-10-10', 0, 1000000.00);
 mysql -u petugas_user -p
 USE db_reservasi_wisata;
 
--- Harus GAGAL: tidak memiliki privilege UPDATE pada TBL_PAKET_WISATA
-UPDATE TBL_PAKET_WISATA 
-SET harga = 0.00 
-WHERE id_paket = 1;
+-- Harus GAGAL: tidak memiliki privilege UPDATE pada packages
+UPDATE packages 
+SET price = 0.00 
+WHERE id = 1;
 ```
 
-**Expected Result:** ❌ `ERROR 1142 (42000): UPDATE command denied to user 'petugas_user'@'localhost' for table 'TBL_PAKET_WISATA'`
+**Expected Result:** ❌ `ERROR 1142 (42000): UPDATE command denied to user 'petugas_user'@'localhost' for table 'packages'`
 
-**Penjelasan:** Petugas hanya memiliki hak SELECT pada `TBL_PAKET_WISATA`, tidak dapat mengubah data master paket wisata.
+**Penjelasan:** Petugas hanya memiliki hak SELECT pada `packages`, tidak dapat mengubah data master paket wisata.
 
 ---
 
@@ -329,20 +365,20 @@ WHERE id_paket = 1;
 mysql -u web_app -p
 USE db_reservasi_wisata;
 
--- Test C2: Harus GAGAL - tidak boleh UPDATE data pelanggan lama
-UPDATE TBL_PELANGGAN 
+-- Test C2: Harus GAGAL - tidak boleh UPDATE data customer existing
+UPDATE customers 
 SET email = 'hacker@mail.com' 
-WHERE id_pelanggan = 1;
+WHERE id = 1;
 
--- Test C3: Harus GAGAL - tidak boleh akses TBL_PENGGUNA (data sensitif)
-SELECT * FROM TBL_PENGGUNA;
+-- Test C3: Harus GAGAL - tidak boleh akses users (data kredensial admin)
+SELECT * FROM users;
 ```
 
 **Expected Result:** 
-- ❌ C2: `ERROR 1142 (42000): UPDATE command denied to user 'web_app'@'localhost' for table 'TBL_PELANGGAN'`
-- ❌ C3: `ERROR 1142 (42000): SELECT command denied to user 'web_app'@'localhost' for table 'TBL_PENGGUNA'`
+- ❌ C2: `ERROR 1142 (42000): UPDATE command denied to user 'web_app'@'localhost' for table 'customers'`
+- ❌ C3: `ERROR 1142 (42000): SELECT command denied to user 'web_app'@'localhost' for table 'users'`
 
-**Penjelasan:** Web app hanya boleh INSERT data baru (pelanggan dan reservasi), tidak boleh modifikasi data existing atau akses credential user internal.
+**Penjelasan:** Web app hanya boleh INSERT data baru (customers, reservations, payments), tidak boleh modifikasi data existing atau akses credential user internal.
 
 ---
 
@@ -355,35 +391,35 @@ SELECT * FROM TBL_PENGGUNA;
 mysql -u petugas_user -p
 USE db_reservasi_wisata;
 
-UPDATE TBL_RESERVASI 
-SET status_pembayaran = 'Lunas', total_biaya = 16000000.00 
-WHERE id_reservasi = 3;
+UPDATE reservations 
+SET status = 'Confirmed', price = 5500000.00 
+WHERE id = 3;
 
 -- 2. Verifikasi log tercatat (Test B2) - bisa sebagai petugas atau admin
 SELECT 
-    id_log,
-    waktu_aksi, 
-    pengguna_mysql, 
-    tabel_terpengaruh, 
-    aksi,
-    data_lama,
-    data_baru
-FROM TBL_AUDIT_LOG 
-WHERE tabel_terpengaruh = 'TBL_RESERVASI'
-ORDER BY id_log DESC 
+    id,
+    action_timestamp, 
+    mysql_user, 
+    table_affected, 
+    action,
+    old_data,
+    new_data
+FROM audit_log 
+WHERE table_affected = 'reservations'
+ORDER BY id DESC 
 LIMIT 1;
 ```
 
 **Expected Result:** ✅ 
 ```
-+--------+---------------------+-------------------------+-------------------+--------+
-| id_log | waktu_aksi          | pengguna_mysql          | tabel_terpengaruh | aksi   |
-+--------+---------------------+-------------------------+-------------------+--------+
-|      1 | 2025-10-09 14:30:15 | petugas_user@localhost  | TBL_RESERVASI     | UPDATE |
-+--------+---------------------+-------------------------+-------------------+--------+
++----+---------------------+-------------------------+-----------------+--------+
+| id | action_timestamp    | mysql_user              | table_affected  | action |
++----+---------------------+-------------------------+-----------------+--------+
+|  1 | 2025-10-10 14:30:15 | petugas_user@localhost  | reservations    | UPDATE |
++----+---------------------+-------------------------+-----------------+--------+
 ```
 
-**Penjelasan:** Trigger `tr_reservasi_update_log` otomatis mencatat perubahan status pembayaran/biaya, termasuk user MySQL yang melakukan perubahan untuk akuntabilitas penuh.
+**Penjelasan:** Trigger `tr_reservations_update_log` otomatis mencatat perubahan status/harga reservasi, termasuk user MySQL yang melakukan perubahan untuk akuntabilitas penuh.
 
 ---
 
@@ -392,14 +428,14 @@ LIMIT 1;
 | Test ID | Test Case | Aspek Keamanan | User | Status | Hasil yang Diharapkan |
 |---------|-----------|---------------|------|--------|----------------------|
 | **A1** | Verifikasi Hashing | Autentikasi | admin | ✅ SUKSES | Password tersimpan sebagai hash SHA2(512), bukan plaintext |
-| **A2** | Insert `jumlah_peserta = 0` | Integritas Data | admin/petugas | ❌ GAGAL | CHECK constraint mencegah data invalid |
+| **A2** | Insert harga negatif | Integritas Data | admin/petugas | ❌ GAGAL | CHECK constraint mencegah data invalid |
 | **B1** | UPDATE status reservasi | Otorisasi (petugas) | petugas_user | ✅ SUKSES | Petugas boleh update transaksi |
 | **B2** | Verifikasi Audit Log | Audit & Akuntabilitas | petugas_user | ✅ SUKSES | Trigger mencatat user & timestamp |
 | **B3** | UPDATE harga paket | Otorisasi (petugas) | petugas_user | ❌ GAGAL | Petugas tidak boleh ubah master data |
 | **B4** | DROP TABLE | Otorisasi (petugas) | petugas_user | ❌ GAGAL | Petugas tidak punya hak DDL |
 | **C1** | INSERT reservasi baru | Otorisasi (web_app) | web_app | ✅ SUKSES | Web app boleh buat reservasi baru |
-| **C2** | UPDATE data pelanggan | Otorisasi (web_app) | web_app | ❌ GAGAL | Web app tidak boleh ubah data existing |
-| **C3** | SELECT TBL_PENGGUNA | Otorisasi (web_app) | web_app | ❌ GAGAL | Web app tidak boleh akses data sensitif |
+| **C2** | UPDATE data customer | Otorisasi (web_app) | web_app | ❌ GAGAL | Web app tidak boleh ubah data existing |
+| **C3** | SELECT users | Otorisasi (web_app) | web_app | ❌ GAGAL | Web app tidak boleh akses data sensitif |
 
 > **Catatan Penting:** 
 > - ✅ **SUKSES** = Fungsi berjalan sesuai harapan (operasi berhasil atau security berfungsi)
@@ -417,6 +453,8 @@ LIMIT 1;
 Sistem-reservasi-paket-wisata-pelayaran/
 │
 ├── db_reservasi_wisata.sql    # Main SQL script (DDL, DML, DCL, Triggers, Test Cases)
+├── cleanup_database.sql       # Cleanup script untuk uninstall database & users
+├── CLEANUP_GUIDE.md          # Panduan lengkap cleanup database
 └── README.md                  # Dokumentasi proyek (file ini)
 ```
 
@@ -424,13 +462,14 @@ Sistem-reservasi-paket-wisata-pelayaran/
 
 File `db_reservasi_wisata.sql` berisi:
 
-1. **DDL (Data Definition Language)** - Struktur 5 tabel dengan constraint keamanan
+1. **DDL (Data Definition Language)** - Struktur 6 tabel dengan constraint keamanan
 2. **DML (Data Manipulation Language)** - Data sample untuk testing
-3. **DCL (Data Control Language)** - User creation & GRANT privileges (3 roles)
-4. **Trigger** - Audit logging otomatis untuk akuntabilitas
+3. **Trigger** - Audit logging otomatis untuk akuntabilitas (2 triggers)
+4. **DCL (Data Control Language)** - User creation & GRANT privileges (3 roles)
 5. **Test Cases** - 9 skenario pengujian (A1-A3, B1-B4, C1-C3)
+6. **Cleanup Section** - Optional uninstall commands (commented)
 
-> **Total:** ~400+ baris SQL lengkap dengan dokumentasi
+> **Total:** ~550+ baris SQL lengkap dengan dokumentasi
 
 ### 🔗 Referensi
 
