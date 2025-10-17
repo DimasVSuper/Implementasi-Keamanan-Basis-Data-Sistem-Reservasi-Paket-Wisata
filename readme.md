@@ -507,7 +507,7 @@ Jika Anda menemukan bug atau ingin berkontribusi:
 - **Mata Kuliah:** Keamanan Basis Data
 - **Program Studi:** Sistem Informasi
 - **Universitas:** Universitas Bina Sarana Informatika
-- **Tahun Akademik:** 2024/2025
+- **Tahun Akademik:** 2025/2026
 - **Dosen Pengampu:** Ahmad Nouvel, S.Kom, M.Kom
 
 ---
