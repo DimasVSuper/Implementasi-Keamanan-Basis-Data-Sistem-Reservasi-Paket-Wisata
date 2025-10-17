@@ -117,6 +117,18 @@ GRANT INSERT ON db_reservasi_wisata.payments TO 'web_app'@'localhost';
 
 Struktur utama sistem reservasi meliputi **6 tabel inti** dengan relasi terkelola:
 
+### 🗂️ Entity Relationship Diagram (ERD)
+
+<div align="center">
+
+![Entity Relationship Diagram - Sistem Reservasi Paket Wisata](ERD.png)
+
+*Gambar 1: ERD Database Sistem Reservasi Paket Wisata Pelayaran*
+
+</div>
+
+### 📊 Diagram Relasi Mermaid
+
 ```mermaid
 erDiagram
     users ||--o{ reservations : manages
