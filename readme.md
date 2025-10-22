@@ -465,7 +465,7 @@ Berikut adalah screenshot lengkap dari proses testing keamanan basis data:
 
 **Screenshot Test A1:** Mengecek bahwa password tersimpan sebagai hash SHA2(512), bukan plaintext
 
-![Test A - Verifikasi Hashing Password](Implementasi-Keamanan-Basis-Data-Sistem-Reservasi-Paket-Wisata/testing/A_testing.png)
+![Test A - Verifikasi Hashing Password](testing/A_testing.png)
 
 *Gambar 2: Test A1 - Password tersimpan dalam bentuk hash SHA2(512) untuk semua user (admin, petugas, customers)*
 
@@ -475,13 +475,13 @@ Berikut adalah screenshot lengkap dari proses testing keamanan basis data:
 
 **Screenshot Test B (Part 1):** Verifikasi kontrol akses petugas dan audit logging
 
-![Test B Part 1 - Otorisasi Petugas & Audit](Implementasi-Keamanan-Basis-Data-Sistem-Reservasi-Paket-Wisata/testing/B_Testing_1.png)
+![Test B Part 1 - Otorisasi Petugas & Audit](testing/B_testing_1.png)
 
 *Gambar 3: Test B1-B2 - Petugas bisa UPDATE status reservasi, dan trigger audit mencatat setiap perubahan*
 
 **Screenshot Test B (Part 2):** Uji kegagalan akses - petugas tidak boleh ubah master data
 
-![Test B Part 2 - Kegagalan Akses Petugas](Implementasi-Keamanan-Basis-Data-Sistem-Reservasi-Paket-Wisata/testing/B_testing_2.png)
+![Test B Part 2 - Kegagalan Akses Petugas](testing/B_testing_2.png)
 
 *Gambar 4: Test B3-B4 - Petugas ditolak saat coba UPDATE packages (master data) atau DROP TABLE (DDL)*
 
@@ -491,7 +491,7 @@ Berikut adalah screenshot lengkap dari proses testing keamanan basis data:
 
 **Screenshot Test C:** Verifikasi isolasi data sensitif dari aplikasi web
 
-![Test C - Otorisasi Web App](Implementasi-Keamanan-Basis-Data-Sistem-Reservasi-Paket-Wisata/testing/C_Testing.png)
+![Test C - Otorisasi Web App](testing/C_testing.png)
 
 *Gambar 5: Test C1-C3 - Web app boleh INSERT reservasi baru, tapi ditolak saat UPDATE data existing atau akses users table*
 
