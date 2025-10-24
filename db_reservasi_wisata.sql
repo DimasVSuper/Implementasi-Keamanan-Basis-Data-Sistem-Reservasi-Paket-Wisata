@@ -2,15 +2,19 @@
 -- ═════════════════════════════════════════════════════════════════════════════
 -- 🛡️ SISTEM RESERVASI PAKET WISATA PELAYARAN - DATABASE SECURITY IMPLEMENTATION
 -- ═════════════════════════════════════════════════════════════════════════════
--- Proyek Akhir Mata Kuliah Keamanan Basis Data
+-- Proyek Akhir Mata Kuliah: Keamanan Basis Data
+-- Universitas Bina Sarana Informatika (UBSI)
+-- Program Studi: Sistem Informasi
 -- 
--- Implementasi 4 Pilar Keamanan:
--- 1. Autentikasi    : SHA2(512) Password Hashing
--- 2. Otorisasi      : Role-Based Access Control (RBAC)
--- 3. Integritas     : CHECK Constraints & Foreign Keys
--- 4. Audit          : Trigger Logging untuk Akuntabilitas
+-- IMPLEMENTASI 4 PILAR KEAMANAN DATABASE:
+-- 1. AUTENTIKASI     : AES_ENCRYPT Password Encryption
+-- 2. OTORISASI       : Role-Based Access Control (RBAC)
+-- 3. INTEGRITAS      : CHECK Constraints & Foreign Keys
+-- 4. AUDIT           : Trigger Logging untuk Akuntabilitas
 --
--- Standar: NIST SP 800-53 & ISO 27001
+-- STANDAR KEAMANAN: NIST SP 800-53 & ISO 27001
+-- 
+-- Oleh: DIMAS BAYU NUGROHO (19240384) - Project Lead & DBA
 -- ═════════════════════════════════════════════════════════════════════════════
 
 -- ═════════════════════════════════════════════════════════════════════════════
@@ -18,33 +22,40 @@
 -- ═════════════════════════════════════════════════════════════════════════════
 
 -- Inisialisasi Database (Clean Installation)
+
+
+-- DROP DATABASE IF EXISTS db_reservasi_wisata;
+
 CREATE DATABASE db_reservasi_wisata 
     CHARACTER SET utf8mb4 
     COLLATE utf8mb4_unicode_ci;
 USE db_reservasi_wisata;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Tabel 1: USERS (Admin/Petugas)
+-- TABEL 1: USERS (Admin/Petugas Internal)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Deskripsi   : Menyimpan kredensial user sistem (admin, petugas)
--- Keamanan    : Password hashing SHA2(512) - mencegah plaintext storage
--- Constraint  : UNIQUE email untuk mencegah duplikasi
+-- Deskripsi   : Menyimpan kredensial user sistem internal (admin, petugas)
+-- Keamanan    : AES_ENCRYPT password encryption dengan secret key
+-- Integritas  : UNIQUE email constraint untuk mencegah duplikasi
+-- Engine      : InnoDB untuk transaction support & foreign key integrity
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE users (
     id              INT PRIMARY KEY AUTO_INCREMENT,
     name            VARCHAR(100) NOT NULL,
     email           VARCHAR(100) NOT NULL UNIQUE,
-    password        VARCHAR(128) NOT NULL,
+    password        TEXT NOT NULL,  -- Changed to TEXT for AES_ENCRYPT storage
     remember_token  VARCHAR(100),
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Tabel 2: CUSTOMERS (Pelanggan)
+-- TABEL 2: CUSTOMERS (Pelanggan/Wisatawan)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Deskripsi   : Data customer/wisatawan yang melakukan reservasi
--- Keamanan    : UNIQUE email & number, password hashing SHA2(512)
+-- Deskripsi   : Data customer/wisatawan yang melakukan reservasi paket wisata
+-- Keamanan    : AES_ENCRYPT password + UNIQUE constraints (email & number)
+-- Integritas  : UNIQUE customer number untuk identifikasi unik pelanggan
+-- Relasi      : One-to-Many dengan reservations & payments
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE customers (
     id          INT PRIMARY KEY AUTO_INCREMENT,
@@ -53,16 +64,18 @@ CREATE TABLE customers (
     address     TEXT,
     phone       VARCHAR(15) NOT NULL,
     email       VARCHAR(100) NOT NULL UNIQUE,
-    password    VARCHAR(128) NOT NULL,
+    password    TEXT NOT NULL,  -- Changed to TEXT for AES_ENCRYPT storage
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Tabel 3: PACKAGES (Paket Wisata Pelayaran)
+-- TABEL 3: PACKAGES (Master Data - Paket Wisata Pelayaran)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Deskripsi   : Katalog paket wisata pelayaran yang ditawarkan
--- Keamanan    : CHECK constraint untuk validasi harga (harus non-negatif)
+-- Deskripsi   : Master catalog paket wisata pelayaran yang ditawarkan
+-- Integritas  : CHECK constraint chk_price_positive (price >= 0)
+-- Business    : Valid_until untuk periode penawaran paket
+-- Relasi      : One-to-Many dengan reservations (referensi produk)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE packages (
     id          INT PRIMARY KEY AUTO_INCREMENT,
@@ -78,13 +91,15 @@ CREATE TABLE packages (
 ) ENGINE=InnoDB;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Tabel 4: RESERVATIONS (Reservasi - CORE TABLE TRANSAKSI UTAMA)
+-- TABEL 4: RESERVATIONS (Core Transaction Table - Booking Wisata)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Deskripsi   : Menyimpan data transaksi booking paket wisata pelayaran
--- Keamanan    : 
---   - UNIQUE code untuk setiap reservasi
---   - FOREIGN KEY: menjaga integritas referensial dengan customers & packages
---   - Trigger audit akan mencatat setiap UPDATE status/price
+-- Deskripsi   : Core table untuk transaksi booking paket wisata pelayaran
+-- Integritas  : 
+--   • UNIQUE code untuk identifikasi unik setiap reservasi
+--   • FOREIGN KEY ke customers & packages (ON DELETE RESTRICT)
+--   • CHECK constraint chk_price_reservation_positive (price >= 0)
+-- Audit       : Trigger tr_reservations_update_log mencatat setiap perubahan
+-- Status      : ENUM('Pending', 'Confirmed', 'Cancelled') untuk lifecycle
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE reservations (
     id          INT PRIMARY KEY AUTO_INCREMENT,
@@ -106,10 +121,14 @@ CREATE TABLE reservations (
 ) ENGINE=InnoDB;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Tabel 5: PAYMENTS (Pembayaran)
+-- TABEL 5: PAYMENTS (Financial Transaction - Pembayaran)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Deskripsi   : Menyimpan data pembayaran dari customer untuk reservasi
--- Keamanan    : FOREIGN KEY ke reservations & customers untuk integritas data
+-- Deskripsi   : Transaksi pembayaran dari customer untuk reservasi
+-- Integritas  : 
+--   • FOREIGN KEY ke reservations & customers (referential integrity)
+--   • CHECK constraint chk_paid_positive (paid >= 0)
+-- Audit       : Trigger tr_payments_insert_log mencatat setiap pembayaran
+-- Business    : Method pembayaran (Transfer Bank, E-wallet, dll)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE payments (
     id              INT PRIMARY KEY AUTO_INCREMENT,
@@ -130,11 +149,14 @@ CREATE TABLE payments (
 ) ENGINE=InnoDB;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Tabel 6: AUDIT_LOG (AUDIT & ACCOUNTABILITY)
+-- TABEL 6: AUDIT_LOG (Security Audit Trail & Accountability)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Deskripsi   : Mencatat setiap perubahan kritis pada database
--- Keamanan    : Menyimpan jejak audit untuk compliance & forensik
--- Populated   : Otomatis melalui trigger (tidak boleh manual insert)
+-- Deskripsi   : Mencatat jejak audit setiap perubahan kritis pada database
+-- Keamanan    : 
+--   • Non-repudiation: menyimpan bukti digital untuk forensik
+--   • Compliance: memenuhi standar ISO 27001 & NIST SP 800-53
+-- Populated   : Otomatis via trigger (TIDAK boleh manual insert)
+-- Contents    : mysql_user, timestamp, old_data, new_data untuk akuntabilitas
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE audit_log (
     id                  INT PRIMARY KEY AUTO_INCREMENT,
@@ -155,23 +177,33 @@ CREATE TABLE audit_log (
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Data Sample: USERS (2 admin/petugas)
 -- ─────────────────────────────────────────────────────────────────────────────
--- KEAMANAN: Password di-hash menggunakan SHA2(512) sebelum disimpan
+-- KEAMANAN: Password di-encrypt menggunakan AES_ENCRYPT sebelum disimpan
 -- Password untuk testing: admin123, petugas456
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO users (name, email, password) VALUES
-('Admin Pusat', 'admin@wisatapelayaran.com', SHA2('admin123', 512)),
-('Petugas Bandung', 'petugas@wisatapelayaran.com', SHA2('petugas456', 512));
+('Admin Pusat', 'admin@wisatapelayaran.com', TO_BASE64(AES_ENCRYPT('admin123', 'wisata_secret_key_2025'))),
+('Petugas Bandung', 'petugas@wisatapelayaran.com', TO_BASE64(AES_ENCRYPT('petugas456', 'wisata_secret_key_2025')));
+
+-- Jangan di jalani! ini hanya testing
+-- SELECT CAST(AES_DECRYPT(FROM_BASE64(password), 'wisata_secret_key_2025') AS CHAR) AS decrypted_password FROM users;
+
+-- Verifikasi dekripsi password (hanya untuk testing)
+
+-- select password from users;
+-- SELECT name, email, 
+--        CAST(AES_DECRYPT(FROM_BASE64(password), 'wisata_secret_key_2025') AS CHAR) AS decrypted_password 
+-- FROM users;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Data Sample: CUSTOMERS (3 pelanggan)
 -- ─────────────────────────────────────────────────────────────────────────────
--- KEAMANAN: Password di-hash menggunakan SHA2(512)
+-- KEAMANAN: Password di-encrypt menggunakan AES_ENCRYPT
 -- Password untuk testing: customer123
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO customers (number, name, address, phone, email, password) VALUES
-('CUST001', 'Ahmad Bachtiar', 'Jl. Merdeka No. 10, Bandung', '081122334455', 'ahmad.b@mail.com', SHA2('customer123', 512)),
-('CUST002', 'Siti Rahayu', 'Jl. Asia Afrika No. 5, Jakarta', '085566778899', 'siti.r@mail.com', SHA2('customer123', 512)),
-('CUST003', 'Budi Santoso', 'Jl. Sudirman No. 20, Surabaya', '087788990011', 'budi.s@mail.com', SHA2('customer123', 512));
+('CUST001', 'Ahmad Bachtiar', 'Jl. Merdeka No. 10, Bandung', '081122334455', 'ahmad.b@mail.com', TO_BASE64(AES_ENCRYPT('customer123', 'wisata_secret_key_2025'))),
+('CUST002', 'Siti Rahayu', 'Jl. Asia Afrika No. 5, Jakarta', '085566778899', 'siti.r@mail.com', TO_BASE64(AES_ENCRYPT('customer123', 'wisata_secret_key_2025'))),
+('CUST003', 'Budi Santoso', 'Jl. Sudirman No. 20, Surabaya', '087788990011', 'budi.s@mail.com', TO_BASE64(AES_ENCRYPT('customer123', 'wisata_secret_key_2025')));
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Data Sample: PACKAGES (3 paket wisata pelayaran)
@@ -195,20 +227,27 @@ INSERT INTO payments (reservation_id, customer_id, method, name_of, paid) VALUES
 (1, 1, 'Transfer Bank', 'Ahmad Bachtiar', 2500000.00);
 
 -- ═════════════════════════════════════════════════════════════════════════════
--- SECTION 3: AUDIT & AKUNTABILITAS (TRIGGER)
+-- SECTION 3: AUDIT TRAIL & ACCOUNTABILITY (DATABASE TRIGGERS)
 -- ═════════════════════════════════════════════════════════════════════════════
--- Implementasi audit trail otomatis untuk setiap perubahan kritis
--- Sesuai dengan standar ISO 27001 & NIST SP 800-53 (AU-2, AU-3)
+-- Security Implementation Framework:
+--   • Automatic audit logging for all critical data changes
+--   • Non-repudiation through user identification & timestamping
+--   • Compliance with ISO 27001 & NIST SP 800-53 (AU-2, AU-3)
+--   • Event-driven monitoring for forensic analysis
+-- 
+-- Coverage: RESERVATIONS (status/price changes) & PAYMENTS (new transactions)
 -- ═════════════════════════════════════════════════════════════════════════════
 
 DELIMITER $$
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Trigger: tr_reservations_update_log
+-- TRIGGER 1: tr_reservations_update_log (Business Transaction Audit)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Tujuan      : Mencatat setiap UPDATE pada RESERVATIONS (status/price)
--- Waktu       : AFTER UPDATE (setelah perubahan berhasil di-commit)
--- Akuntabilitas: Mencatat USER() yang melakukan perubahan dan timestamp
+-- Purpose         : Log critical changes to RESERVATIONS table
+-- Monitored Fields: status (booking lifecycle) & price (financial integrity)
+-- Execution Time  : AFTER UPDATE (post-commit for data consistency)  
+-- Accountability  : Records MySQL USER() + AUTO timestamp for non-repudiation
+-- Business Impact : Ensures auditability of reservation modifications
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TRIGGER tr_reservations_update_log
 AFTER UPDATE ON reservations
@@ -237,11 +276,13 @@ BEGIN
 END$$
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Trigger: tr_payments_insert_log
+-- TRIGGER 2: tr_payments_insert_log (Financial Transaction Audit)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Tujuan      : Mencatat setiap INSERT pembayaran baru
--- Waktu       : AFTER INSERT
--- Akuntabilitas: Tracking semua transaksi pembayaran
+-- Purpose         : Log all new payment transactions for financial control
+-- Monitored Event : INSERT operations on PAYMENTS table
+-- Execution Time  : AFTER INSERT (immediate logging post-transaction)
+-- Accountability  : Complete payment details tracking with user attribution
+-- Compliance      : Financial audit requirements & anti-fraud monitoring
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TRIGGER tr_payments_insert_log
 AFTER INSERT ON payments
@@ -271,36 +312,62 @@ DELIMITER ;
 -- ═════════════════════════════════════════════════════════════════════════════
 -- SECTION 4: DCL (DATA CONTROL LANGUAGE) - ROLE-BASED ACCESS CONTROL
 -- ═════════════════════════════════════════════════════════════════════════════
--- Implementasi Otorisasi dengan Prinsip "Least Privilege"
--- Setiap role hanya diberikan akses minimal yang diperlukan
--- Sesuai dengan NIST SP 800-53 (AC-6: Least Privilege)
+-- Framework Keamanan Otorisasi:
+--   • Role-Based Access Control (RBAC) Implementation
+--   • Principle of Least Privilege (NIST SP 800-53 AC-6)
+--   • Separation of Duties & Defense in Depth
+--   • Multi-layered Security (Database + Application Level)
+-- 
+-- Arsitektur Role Hierarchy:
+--   1. admin_user    : Administrative privileges (DDL, DML, DCL)
+--   2. petugas_user  : Operational privileges (DML operations)
+--   3. web_app       : Application privileges (limited DML)
 -- ═════════════════════════════════════════════════════════════════════════════
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 4.1. Pembuatan User MySQL untuk Setiap Role
+-- 4.1. USER ACCOUNT CREATION & AUTHENTICATION
 -- ─────────────────────────────────────────────────────────────────────────────
--- CATATAN: Memerlukan privilege CREATE USER (jalankan sebagai root)
--- Password: AdminPass123!, PetugasPass456!, WebAppPass789!
+-- Security Implementation:
+--   • Strong Password Policy: kompleksitas & panjang minimum
+--   • Host-based Access Control: localhost restriction
+--   • Account Separation: dedicated users per functional role
+-- 
+-- Credential Information:
+--   admin_user    : AdminPass123!    (Administrative operations)
+--   petugas_user  : PetugasPass456!  (Staff operations)  
+--   web_app       : WebAppPass789!   (Application integration)
+-- 
+-- PREREQUISITE: Requires CREATE USER privilege (execute as MySQL root)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE USER IF NOT EXISTS 'admin_user'@'localhost'   IDENTIFIED BY 'AdminPass123!';
 CREATE USER IF NOT EXISTS 'petugas_user'@'localhost' IDENTIFIED BY 'PetugasPass456!';
 CREATE USER IF NOT EXISTS 'web_app'@'localhost'      IDENTIFIED BY 'WebAppPass789!';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 4.2. ROLE A: ADMIN USER (Full Control)
+-- 4.2. ROLE A: ADMIN USER (Database Administrator Privileges)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Hak Akses   : ALL PRIVILEGES (DDL, DML, DCL)
--- Tujuan      : Manajemen database, backup, recovery, user management
--- Risiko      : TINGGI - harus dibatasi hanya untuk DBA
+-- Privilege Scope : ALL PRIVILEGES (DDL, DML, DCL operations)
+-- Use Cases       :
+--   • Database schema management & maintenance
+--   • System backup, recovery, & disaster planning
+--   • User account management & privilege administration
+--   • Performance monitoring & optimization
+-- Risk Level      : CRITICAL - restricted to certified DBA personnel only
+-- Security Control: Should be used only for administrative tasks, not daily ops
 -- ─────────────────────────────────────────────────────────────────────────────
 GRANT ALL PRIVILEGES ON db_reservasi_wisata.* TO 'admin_user'@'localhost';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 4.3. ROLE B: PETUGAS USER (Transaction Management)
+-- 4.3. ROLE B: PETUGAS USER (Operational Staff Privileges)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Hak Akses   : Terbatas pada operasi reservasi, pelanggan, dan pembayaran
--- Tujuan      : Kelola transaksi booking, update status, kelola pembayaran
--- Prinsip     : Least Privilege - TIDAK boleh ubah master data (packages)
+-- Privilege Scope : DML operations (SELECT, INSERT, UPDATE) on business tables
+-- Use Cases       :
+--   • Customer registration & profile management  
+--   • Reservation booking & status management
+--   • Payment processing & confirmation
+--   • Operational reporting & data entry
+-- Risk Level      : MEDIUM - business operational access with audit trails
+-- Security Control: Cannot modify master data (PACKAGES) - read-only access only
 -- ─────────────────────────────────────────────────────────────────────────────
 GRANT SELECT ON db_reservasi_wisata.users TO 'petugas_user'@'localhost';
 GRANT SELECT, INSERT, UPDATE ON db_reservasi_wisata.customers TO 'petugas_user'@'localhost';
@@ -310,11 +377,16 @@ GRANT SELECT, INSERT ON db_reservasi_wisata.payments TO 'petugas_user'@'localhos
 GRANT SELECT, INSERT ON db_reservasi_wisata.audit_log TO 'petugas_user'@'localhost';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 4.4. ROLE C: WEB_APP USER (Customer Transactions Only)
+-- 4.4. ROLE C: WEB_APP USER (Application Integration Privileges)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Hak Akses   : Paling terbatas (SELECT packages, INSERT customer/reservation)
--- Tujuan      : Aplikasi Android untuk customer self-service booking
--- Prinsip     : TIDAK boleh akses data sensitif (users, audit_log)
+-- Privilege Scope : Most restrictive (INSERT-only for customer transactions)
+-- Use Cases       :
+--   • Mobile/web application backend connectivity
+--   • Customer self-service registration & booking
+--   • Public API endpoints for reservation system
+--   • Automated payment processing integration
+-- Risk Level      : LOW - minimal privileges for public-facing applications
+-- Security Control: NO access to sensitive data (USERS, AUDIT_LOG tables)
 -- ─────────────────────────────────────────────────────────────────────────────
 GRANT SELECT ON db_reservasi_wisata.packages TO 'web_app'@'localhost';
 GRANT INSERT ON db_reservasi_wisata.customers TO 'web_app'@'localhost';
@@ -322,42 +394,50 @@ GRANT INSERT ON db_reservasi_wisata.reservations TO 'web_app'@'localhost';
 GRANT INSERT ON db_reservasi_wisata.payments TO 'web_app'@'localhost';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Terapkan semua perubahan privilege
+-- PRIVILEGE ACTIVATION & SYSTEM REFRESH
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Ensures all privilege changes take effect immediately without restart
 -- ─────────────────────────────────────────────────────────────────────────────
 FLUSH PRIVILEGES;
 
 -- ═════════════════════════════════════════════════════════════════════════════
--- SECTION 5: TEST CASES - VERIFIKASI KEAMANAN DATABASE
+-- SECTION 5: COMPREHENSIVE SECURITY TEST SUITE
 -- ═════════════════════════════════════════════════════════════════════════════
--- Total 9 Test Cases untuk memverifikasi 4 pilar keamanan:
--- - Test A1-A3: Autentikasi & Integritas Data
--- - Test B1-B4: Otorisasi (Petugas User)
--- - Test C1-C3: Otorisasi (Web App User)
+-- Testing Framework: 9 systematic test cases covering 4 security pillars
+-- 
+-- Test Categories:
+--   • Series A (A1-A3): Authentication & Data Integrity verification
+--   • Series B (B1-B4): Authorization testing for Petugas User role
+--   • Series C (C1-C3): Authorization testing for Web App User role
+-- 
+-- Methodology: Black-box & white-box testing with positive/negative scenarios
 -- ═════════════════════════════════════════════════════════════════════════════
 
 -- ╔═════════════════════════════════════════════════════════════════════════╗
--- ║ TEST SERIES A: AUTENTIKASI & INTEGRITAS DATA                            ║
+-- ║ TEST SERIES A: AUTHENTICATION & DATA INTEGRITY VERIFICATION            ║
 -- ╚═════════════════════════════════════════════════════════════════════════╝
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- TEST A1: Verifikasi Password Hashing (✅ HARUS BERHASIL)
+-- TEST A1: AES Password Encryption Verification (✅ EXPECTED SUCCESS)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Tujuan: Memastikan password disimpan sebagai hash SHA2(512), bukan plaintext
--- Expected: Kolom password berisi string 128 karakter (hex)
+-- Objective       : Verify password storage uses AES_ENCRYPT (not plaintext)
+-- Security Control: Cryptographic protection of sensitive authentication data
+-- Expected Result : Encrypted strings that decrypt correctly with secret key
+-- Compliance      : NIST SP 800-63B authentication guidelines
 -- ─────────────────────────────────────────────────────────────────────────────
-SELECT 'A1. Uji Hashing Password (Users)' AS Test_Case, 
+SELECT 'A1. Uji AES Encryption (Users)' AS Test_Case, 
        name, 
        email,
-       password,
-       LENGTH(password) AS Hash_Length
+       password AS encrypted_password,
+       CAST(AES_DECRYPT(FROM_BASE64(password), 'wisata_secret_key_2025') AS CHAR) AS decrypted_password
 FROM users 
 WHERE email = 'admin@wisatapelayaran.com';
 
-SELECT 'A1. Uji Hashing Password (Customers)' AS Test_Case, 
+SELECT 'A1. Uji AES Encryption (Customers)' AS Test_Case, 
        name, 
        email,
-       password,
-       LENGTH(password) AS Hash_Length
+       password AS encrypted_password,
+       CAST(AES_DECRYPT(FROM_BASE64(password), 'wisata_secret_key_2025') AS CHAR) AS decrypted_password
 FROM customers 
 WHERE email = 'ahmad.b@mail.com';
 
