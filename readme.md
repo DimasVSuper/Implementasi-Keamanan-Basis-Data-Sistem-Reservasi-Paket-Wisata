@@ -4,11 +4,27 @@
 
 ![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
 ![Security](https://img.shields.io/badge/Security-Database-red?style=for-the-badge&logo=security&logoColor=white)
-![License](https://img.shields.io/badge/License-Academic-g###) 📊 Hasil Testing Lengkap
+![License](https://img.shields.io/badge/License-Academic-green?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)
+
+**Proyek Akhir Mata Kuliah Keamanan Basis Data**
+
+*Mobile Commerce Tourism Reservation System dengan implementasi standar keamanan NIST & ISO 27001*
+
+[📖 Dokumentasi](#-dokumentasi) •
+[🚀 Quick Start](#-quick-start) •
+[🔐 Fitur Keamanan](#-aspek-keamanan-yang-diimplementasikan) •
+[🧪 Testing](#-skrip-simulasi-verifikasi)
+
+</div>
+
+---
+
+### 📊 Hasil Testing Lengkap
 
 | Test ID | Test Case | Aspek Keamanan | User | Status | Hasil yang Diharapkan |
 |---------|-----------|---------------|------|--------|----------------------|
-| **A1** | Verifikasi Hashing | Autentikasi | admin | ✅ SUKSES | Password tersimpan sebagai hash SHA2(512), bukan plaintext |
+| **A1** | Verifikasi Enkripsi AES | Autentikasi | admin | ✅ SUKSES | Password tersimpan sebagai AES_ENCRYPT, bukan plaintext |
 | **A2** | Insert `jumlah_peserta = 0` | Integritas Data | admin/petugas | ❌ GAGAL | CHECK constraint mencegah data invalid |
 | **B1** | UPDATE status reservasi | Otorisasi (petugas) | petugas_user | ✅ SUKSES | Petugas boleh update transaksi |
 | **B2** | Verifikasi Audit Log | Audit & Akuntabilitas | petugas_user | ✅ SUKSES | Trigger mencatat user & timestamp |
@@ -22,17 +38,7 @@
 > - ✅ **SUKSES** = Fungsi berjalan sesuai harapan (operasi berhasil atau security berfungsi)
 > - ❌ **GAGAL** = Security bekerja dengan baik (mencegah operasi yang tidak diizinkan)
 > 
-> Kegagalan pada A2, B3, B4, C2, C3 adalah **hasil yang diinginkan** (security working as intended).=for-the-badge)
-![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)
-
-**Proyek Akhir Mata Kuliah Keamanan Basis Data**
-
-*Mobile Commerce Tourism Reservation System dengan implementasi standar keamanan NIST & ISO 27001*
-
-[📖 Dokumentasi](#-dokumentasi) •
-[🚀 Quick Start](#-quick-start) •
-[🔐 Fitur Keamanan](#-aspek-keamanan-yang-diimplementasikan) •
-[🧪 Testing](#-skrip-simulasi-verifikasi)
+> Kegagalan pada A2, B3, B4, C2, C3 adalah **hasil yang diinginkan** (security working as intended).
 
 </div>
 
@@ -87,12 +93,26 @@ Proyek ini berfokus pada **empat pilar utama keamanan**, yang diimplementasikan 
 
 | 🔐 Pilar Keamanan | 💻 Implementasi Teknis | 📝 Detail & Tujuan Keamanan |
 |-------------------|------------------------|----------------------------|
-| **1. Autentikasi** | `SHA2(512)` Password Hashing | Melindungi kredensial admin/petugas (`users`) dan customer (`customers`) dari kebocoran data. Password tidak tersimpan dalam plaintext. |
+| **1. Autentikasi** | `AES_ENCRYPT()` Password Encryption | Melindungi kredensial admin/petugas (`users`) dan customer (`customers`) dari kebocoran data menggunakan AES encryption dengan secret key. Password tidak tersimpan dalam plaintext. |
 | **2. Otorisasi (Kontrol Akses)** | DCL (`GRANT`) & Prinsip Least Privilege | Membatasi hak akses setiap peran (`admin_user`, `petugas_user`, `web_app`) hanya pada tabel dan operasi yang diperlukan, mencegah akses berlebihan (NIST SP 800-53). |
 | **3. Integritas Data** | `CHECK` Constraint & `FOREIGN KEY` | Menjaga kualitas data (contoh: `price >= 0`, `paid >= 0`) dan konsistensi relasi antar tabel dengan ON DELETE RESTRICT. |
 | **4. Audit & Akuntabilitas** | `TRIGGER` ke `audit_log` | Mencatat setiap perubahan kritis pada transaksi (`UPDATE reservations`, `INSERT payments`), memberikan jejak audit (`mysql_user` dan `action_timestamp`) untuk akuntabilitas. |
 
-### 🔒 Role-Based Access Control (RBAC)
+### � Password Encryption dengan AES
+
+```sql
+-- Contoh enkripsi password menggunakan AES_ENCRYPT
+INSERT INTO users (name, email, password) VALUES
+('Admin Pusat', 'admin@wisatapelayaran.com', 
+ TO_BASE64(AES_ENCRYPT('admin123', 'wisata_secret_key_2025')));
+
+-- Verifikasi dekripsi password (untuk testing)
+SELECT name, email, 
+       CAST(AES_DECRYPT(FROM_BASE64(password), 'wisata_secret_key_2025') AS CHAR) AS decrypted_password 
+FROM users;
+```
+
+### �🔒 Role-Based Access Control (RBAC)
 
 ```sql
 -- Admin User: Full Control
@@ -142,8 +162,8 @@ erDiagram
 
 | Tabel | Deskripsi | Fitur Keamanan |
 |-------|-----------|----------------|
-| `users` | Data admin/petugas sistem internal | Password hashing SHA2(512), UNIQUE email |
-| `customers` | Data customer/wisatawan yang booking | UNIQUE email & number, password hashing SHA2(512) |
+| `users` | Data admin/petugas sistem internal | Password AES encryption, UNIQUE email |
+| `customers` | Data customer/wisatawan yang booking | UNIQUE email & number, password AES encryption |
 | `packages` | Katalog paket wisata pelayaran | CHECK constraint `price >= 0`, destination & photo info |
 | `reservations` | **Transaksi booking** (core table) | UNIQUE code, CHECK `price >= 0`, Foreign key constraints, audit trigger |
 | `payments` | Data pembayaran dari customer | CHECK `paid >= 0`, Foreign key ke reservations & customers |
@@ -155,12 +175,12 @@ erDiagram
 <summary><b>Klik untuk melihat DDL lengkap</b></summary>
 
 ```sql
--- USERS: Autentikasi admin/petugas dengan SHA2(512)
+-- USERS: Autentikasi admin/petugas dengan AES_ENCRYPT
 CREATE TABLE users (
     id              INT PRIMARY KEY AUTO_INCREMENT,
     name            VARCHAR(100) NOT NULL,
     email           VARCHAR(100) NOT NULL UNIQUE,
-    password        VARCHAR(128) NOT NULL,  -- SHA2(512) hash
+    password        TEXT NOT NULL,  -- AES_ENCRYPT storage
     remember_token  VARCHAR(100),
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -174,9 +194,9 @@ CREATE TABLE customers (
     address     TEXT,
     phone       VARCHAR(15) NOT NULL,
     email       VARCHAR(100) NOT NULL UNIQUE,
-    password    VARCHAR(128) NOT NULL,  -- SHA2(512) hash
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    password        TEXT NOT NULL,  -- AES_ENCRYPT dengan BASE64 encoding
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- PACKAGES: Paket wisata pelayaran
@@ -341,7 +361,7 @@ INSERT INTO packages (name, destination, description, price, valid_until)
 VALUES ('Paket Test', 'Test Destination', 'Test', -1000.00, '2025-12-31');
 ```
 
-**Expected Result:** ❌ `ERROR 4025 (23000): CONSTRAINT 'chk_price_positive' failed for 'db_reservasi_wisata'.'packages'`
+**Expected Result:** ❌ `ERROR 3819 (HY000): Check constraint 'chk_price_positive' is violated.`
 
 **Penjelasan:** Constraint `CHECK (price >= 0)` mencegah data yang tidak valid masuk ke database.
 
@@ -439,7 +459,7 @@ LIMIT 1;
 
 | Test ID | Test Case | Aspek Keamanan | User | Status | Hasil yang Diharapkan |
 |---------|-----------|---------------|------|--------|----------------------|
-| **A1** | Verifikasi Hashing | Autentikasi | admin | ✅ SUKSES | Password tersimpan sebagai hash SHA2(512), bukan plaintext |
+| **A1** | Verifikasi Enkripsi AES | Autentikasi | admin | ✅ SUKSES | Password tersimpan sebagai AES_ENCRYPT, bukan plaintext |
 | **A2** | Insert harga negatif | Integritas Data | admin/petugas | ❌ GAGAL | CHECK constraint mencegah data invalid |
 | **B1** | UPDATE status reservasi | Otorisasi (petugas) | petugas_user | ✅ SUKSES | Petugas boleh update transaksi |
 | **B2** | Verifikasi Audit Log | Audit & Akuntabilitas | petugas_user | ✅ SUKSES | Trigger mencatat user & timestamp |
@@ -461,13 +481,13 @@ LIMIT 1;
 
 Berikut adalah screenshot lengkap dari proses testing keamanan basis data:
 
-### 📸 Test Case A: Verifikasi Hashing Password (Autentikasi)
+### 📸 Test Case A: Verifikasi Enkripsi Password (Autentikasi)
 
-**Screenshot Test A1:** Mengecek bahwa password tersimpan sebagai hash SHA2(512), bukan plaintext
+**Screenshot Test A1:** Mengecek bahwa password tersimpan sebagai AES_ENCRYPT, bukan plaintext
 
-![Test A - Verifikasi Hashing Password](testing/A_testing.png)
+![Test A - Verifikasi Enkripsi Password](testing/A_testing.png)
 
-*Gambar 2: Test A1 - Password tersimpan dalam bentuk hash SHA2(512) untuk semua user (admin, petugas, customers)*
+*Gambar 2: Test A1 - Password tersimpan dalam bentuk AES encryption untuk semua user (admin, petugas, customers)*
 
 ---
 
@@ -506,7 +526,7 @@ Implementasi-Keamanan-Basis-Data-Sistem-Reservasi-Paket-Wisata/
 │
 ├── 📄 README.md                              # Dokumentasi utama
 ├── 📄 ERD.png                                # Entity Relationship Diagram
-├── 💾 db_reservasi_wisata.sql                # Main SQL script (550+ lines)
+├── 💾 db_reservasi_wisata.sql                # Main SQL script (565 lines)
 │
 ├── 📁 clean_up/                              # Folder cleanup & reset
 │   ├── cleanup_database.sql                  # Drop users & database
@@ -532,7 +552,7 @@ File `db_reservasi_wisata.sql` berisi:
 5. **Test Cases** - 9 skenario pengujian (A1-A3, B1-B4, C1-C3)
 6. **Cleanup Section** - Optional uninstall commands (commented)
 
-> **Total:** ~550+ baris SQL lengkap dengan dokumentasi
+> **Total:** 565 baris SQL lengkap dengan dokumentasi
 
 ### 🔗 Referensi
 
